@@ -6,10 +6,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Redirect</title>
 </head>
-<body>
-    <h2>This email already exists. Please use another one or Try signing in</h2>
-    <p>OR</p>
-    <h2>This username already exists. Try signing in</h2>
-    <a href="/auth/login"><button>Go to login</button></a>
+<body style="background-color: rgb(39, 37, 37); color:aliceblue">
+    <center>
+        <h2><%= message%></h2>
+        <hr>
+        <div id="seconds_display"></div>
+        <img src="/pics/reload2.gif" alt="reload gif" height="20px" width="20px">
+    </center>
 </body>
+<script>
+    let seconds = 0;
+    const displaySeconds =()=>{
+        seconds+=1;
+        document.getElementById("seconds_display").innerText = `You will be redirected to the login page in ${seconds} seconds...`
+    }
+    setInterval(displaySeconds,1000)
+
+    const redirect = () =>{
+        fetch("/auth/invalid-login",{
+            method:'get'
+        })
+        .then((response)=> response.json())
+        .then((data)=> window.location.href = data.redirect)
+        .catch((err)=> console.log(err))
+    }
+    setTimeout(redirect,5000)
+</script>
 </html>

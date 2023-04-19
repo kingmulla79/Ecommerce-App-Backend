@@ -8,7 +8,9 @@ router.get("/login",UserDetailsController.User_Login_Page)
 router.get("/register",UserDetailsController.User_Register_Page)
 router.post("/register",validateUserRegistration, userValidation,UserDetailsController.User_Register_User)
 router.post("/login",validateUserSignIn, userValidation, UserDetailsController.User_Login_User)
-router.get("/redirect",UserDetailsController.User_Redirect_Page)
+router.get("/invalid-login",(req,res)=>{
+    res.json({ redirect: "/auth/login"})
+})
 router.get("/user", (req,res)=>{
     res.send("Secret mode")
 })

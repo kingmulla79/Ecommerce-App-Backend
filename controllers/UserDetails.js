@@ -10,17 +10,13 @@ const User_Register_Page = (req,res)=>{
     res.render("register")
 }
 
-const User_Redirect_Page = (req,res)=>{
-    res.render("redirect")
-}
-
 const User_Register_User = async (req,res)=>{
     try{
         const isNewUser = await UserDetails.isThisUsernameInUse(req.body.username);
-        if(!isNewUser) return res.redirect("/auth/redirect");
+        if(!isNewUser) return res.render("redirect",{message:"A user with this username already exists"});
 
         const isNewEmail = await UserDetails.isThisEmailInUse(req.body.email);
-        if(!isNewEmail) return res.redirect("/auth/redirect");
+        if(!isNewEmail) return res.render("redirect",{message:"A user with this email already exists"});
         const userDetails = new UserDetails({
             username:req.body.username,
             phone:req.body.phone,
@@ -48,7 +44,8 @@ const User_Login_User = async (req,res)=>{
         const result = await saved_user.comparePassword(req.body.password)
         if(result){
             const token = jwt.sign({user_id: saved_user._id}, process.env.JWT_SECRET, {expiresIn: "1d"})
-            res.header("authorization",`${token}`).redirect("/auth/user")
+            res.redirect("/auth/user")
+            // res.header("authorization",`${token}`).redirect("/auth/user")
             // res.json({token})
         }
         else{
@@ -63,7 +60,6 @@ const User_Login_User = async (req,res)=>{
 module.exports = {
     User_Login_Page,
     User_Register_Page,
-    User_Redirect_Page,
     User_Register_User,
     User_Login_User
 }
