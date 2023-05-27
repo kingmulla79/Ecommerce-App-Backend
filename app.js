@@ -2,35 +2,53 @@
 require("dotenv").config();
 const express = require("express");
 const morgan = require("morgan");
-const mongoose = require("mongoose");
-const cors = require("cors")
-const UserDetailsRoutes = require("./routes/UserDetails");
+const cors = require("cors");
+const { UserDetailsRoutes, HomepageRoutes } = require("./router");
+const connectDatabase = require("./Database/Database");
+const cookieParser = require("cookie-parser");
 const app = express();
 
+//connection to DB
 
-mongoose.connect(process.env.DBURI, { useNewUrlParser: true, useUnifiedTopology: true})
-    .then((result)=>{
-        console.log("connected")
-        app.listen(process.env.APP_PORT)
-    })
-    .catch((err)=>{
-        console.log("error connecting to database")
-        console.log(err)
-    });
+connectDatabase();
+
+const server = app.listen(process.env.APP_PORT, () => {
+  console.log(
+    `Server is running on port http://localhost/${process.env.APP_PORT}`
+  );
+});
 
 //middleware and static files
-app.set("view engine", "ejs")
-app.use(morgan("dev"))
-app.use(cors())
-app.use(express.json())
-app.use(express.static("public"))
-app.use(express.urlencoded({extended:true}))
-app.use("/auth",UserDetailsRoutes)
+app.use(morgan("dev"));
+app.use(cors());
+app.use("/", express.static("uploads"));
+app.use(express.json());
+app.use(cookieParser());
+app.use(express.urlencoded({ extended: true }));
 
-app.get("/", (req,res)=>{
-    res.render("index")
-})
+// routes
+app.use("/api/auth", UserDetailsRoutes);
+app.use("/api/home", HomepageRoutes);
 
-app.use((req,res)=>{
-    res.status(404).render("404",{title:"Page Not Found"})
-})
+// handling uncaught Exceptions
+process.on("uncaughtException", (err) => {
+  console.log(`Error: ${err.message}`);
+  console.log(`Shutting down server`);
+});
+
+// unhandled promise rejection
+process.on("unhandledRejection", (err) => {
+  console.log(`Shutting down server for ${err}`);
+  console.log(`Shutting down server for unhandled promise rejection`);
+
+  server.close(() => {
+    process.exit();
+  });
+});
+
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "The route doesn't exist",
+  });
+});
