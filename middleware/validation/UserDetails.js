@@ -10,14 +10,26 @@ exports.validateUserRegistration = [
     .withMessage("Name must be between 5 to 20 characters"),
   check("phone")
     .trim()
+    .not()
+    .isEmpty()
+    .withMessage("Phone number is required")
     .isInt()
     .withMessage("Only uses numbers for your phone number")
     .isLength({ min: 10, max: 10 })
     .withMessage("Your number should contain exactly 10 digits"),
   check("email")
+    .trim()
+    .not()
+    .isEmpty()
+    .withMessage("The email address is empty")
     .normalizeEmail()
     .isEmail()
-    .withMessage("Enter a valid email address"),
+    .withMessage("Enter a valid email address")
+    .matches(
+      /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|.(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
+    )
+    .withMessage("Only use valid email characters"),
+
   check("password")
     .trim()
     .not()

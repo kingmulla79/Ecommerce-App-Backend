@@ -6,18 +6,18 @@ const userDetailsSchema = new Schema(
   {
     username: {
       type: String,
-      required: true,
+      required: [true, "Please enter a valid username"],
     },
     phone: {
-      type: Number,
+      type: String,
     },
     email: {
       type: String,
-      required: true,
+      required: [true, "Please enter a valid email address"],
     },
     password: {
       type: String,
-      required: true,
+      required: [true, "Please enter a valid password"],
     },
     profile_pic: {
       type: String,
@@ -36,14 +36,15 @@ const userDetailsSchema = new Schema(
 );
 
 userDetailsSchema.pre("save", function (next) {
-  if (this.isModified("password")) {
-    bcrypt.hash(this.password, 10, (err, hash) => {
-      if (err) return next(err);
-
-      this.password = hash;
-      next();
-    });
+  if (!this.isModified("password")) {
+    next();
   }
+  bcrypt.hash(this.password, 10, (err, hash) => {
+    if (err) return next(err);
+
+    this.password = hash;
+    next();
+  });
 });
 
 userDetailsSchema.methods.comparePassword = async function (password) {

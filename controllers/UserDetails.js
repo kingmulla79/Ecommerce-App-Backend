@@ -1,23 +1,9 @@
 require("dotenv").config();
-const UserDetails = require("../models/UserDetails");
 const jwt = require("jsonwebtoken");
-const { sendEmail, sendVerificationEmail } = require("../utils/Auto_Email");
+const { sendEmail, sendOTPEmail } = require("../utils/Auto_Email");
 const bcrypt = require("bcrypt");
-const UserVerification = require("../models/UserVerification");
-
-const User_Login_Page = (req, res) => {
-  res.status(200).json({
-    success: true,
-    redirect: "/api/auth/login",
-  });
-};
-
-const User_Register_Page = (req, res) => {
-  res.status(200).json({
-    success: true,
-    redirect: "/api/auth/register",
-  });
-};
+const UserDetails = require("../models/UserDetails");
+const UserOTPVerification = require("../models/UserOTPVerification");
 
 const User_Register_User = async (req, res) => {
   try {
@@ -59,14 +45,42 @@ const User_Register_User = async (req, res) => {
 
     console.log(newuser_id);
 
-    const subject = `Ecommerce Inc. Sign up`;
-    const text = `Your account has been successfully created. Please verify your email using this link`;
-    sendVerificationEmail(newuser_id[0]._id, user_email, res)
+    const otp = `${Math.floor(1000 + Math.random() * 9000)}`;
+    const subject = `Ecommerce email verification`;
+    const html = `<p>Enter the OTP code below.</p><p>This code will expire in 1 hours.</p><br/>
+      <p>Enter this code <b>${otp}</b> to verify</p>`;
+
+    const saltRounds = 10;
+    const hashedOTP = await bcrypt.hash(otp, saltRounds);
+    new UserOTPVerification({
+      userId: newuser_id[0]._id,
+      otp: hashedOTP,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 3600000,
+    })
+      .save()
+      .then((result) => {
+        console.log("OTP successfully saved");
+      })
+      .catch((err) => {
+        console.log(err);
+        res.status(401).json({
+          success: false,
+          message: "Error in saving the OTP.Try again later",
+        });
+      });
+
+    sendOTPEmail(user_email, subject, html)
       .then((result) => {
         res.status(201).json({
+          status: "PENDING",
           success: true,
-          message: `Successfully registered. ${result.message}`,
-          redirect: "/api/auth/login",
+          message: `Successfully registered${result.message}.Please authenticate your email.`,
+          data: {
+            userId: newuser_id[0]._id,
+            email: user_email,
+          },
+          redirect: "/api/auth/verifyOTP",
         });
       })
       .catch((error) => {
@@ -85,124 +99,153 @@ const User_Register_User = async (req, res) => {
   }
 };
 
-const User_Verify_User = async (req, res) => {
-  let { userId, uniqueString } = req.params;
-  UserVerification.find({ userId })
-    .then((result) => {
-      if (result.length > 0) {
-        // user verification details exist
+const User_Verify_OTP = async (req, res) => {
+  try {
+    let { userId, otp } = req.body;
 
-        const { expiresAt } = result[0];
-        const hashedUniqueString = result[0].uniqueString;
-        // check for expired verification details
+    if (!userId || !otp) {
+      return res.status(409).json({
+        success: false,
+        message: "Empty otp details",
+      });
+    } else {
+      const UserOTPVerificationRecords = await UserOTPVerification.find({
+        userId,
+      });
+      if (UserOTPVerificationRecords.length <= 0) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "No existing OTP record. The account record does not exist or has already been verified. Please sign up or log in",
+        });
+      } else {
+        const { expiresAt } = UserOTPVerificationRecords[0];
+        const hashedOTP = UserOTPVerificationRecords[0].otp;
+
         if (expiresAt < Date.now()) {
-          // Expired record
-          UserVerification.deleteOne({ userId })
-            .then((result) => {
-              UserDetails.deleteOne({ _id: userId })
-                .then(() => {
-                  res.json({
-                    message: `The verification link has expired. Please sign in again`,
-                  });
-                })
-                .catch((error) => {
-                  console.log(error);
-                  res.status(400).json({
-                    success: false,
-                    message:
-                      "An error occured while deleting verified user details",
-                    error,
-                  });
-                });
+          // OTP has expired
+          await UserOTPVerification.deleteMany({ userId })
+            .then(() => {
+              res.json({
+                message: `The OTP code has expired. Please sign in again`,
+              });
             })
             .catch((error) => {
               console.log(error);
-              res.status(500).json({
+              res.status(400).json({
                 success: false,
                 message:
-                  "An error occured while deleting expired verification details",
+                  "An error occured while deleting verified user details",
                 error,
               });
             });
         } else {
-          // valid verification record
-          //compare unique string
-          bcrypt
-            .compare(uniqueString, hashedUniqueString)
-            .then((result) => {
-              if (result) {
-                // string match
-                UserDetails.updateOne({ _id: userId }, { verified: true })
-                  .then(() => {
-                    UserVerification.deleteOne({ userId })
-                      .then(() => {
-                        res.status(201).json({
-                          success: true,
-                          message: `Successfully verified. You can now login ${result.message}`,
-                          redirect: "/api/auth/login",
-                        });
-                      })
-                      .catch((error) => {
-                        console.log(error);
-                        res.status(400).json({
-                          success: false,
-                          message:
-                            "An error occured while deleting verification credentials",
-                          error,
-                        });
-                      });
-                  })
-                  .catch((error) => {
-                    console.log(error);
-                    res.status(400).json({
-                      success: false,
-                      message:
-                        "An error occured while updating verification status",
-                      error,
-                    });
-                  });
-              } else {
-                // record exists but incorrect verification details passed
+          const validOTP = await bcrypt.compare(otp, hashedOTP);
+
+          if (!validOTP) {
+            // supplied OTP is wrong
+            res.status(400).json({
+              success: false,
+              message: "Invalid OTP code passed. Check your mail",
+              error,
+            });
+          } else {
+            await UserDetails.updateOne({ _id: userId }, { verified: true });
+            UserOTPVerification.deleteMany({ userId })
+              .then((result) => {
+                res.status(201).json({
+                  success: true,
+                  message: `Successfully verified. You can now login`,
+                  redirect: "/api/auth/login",
+                });
+              })
+              .catch((error) => {
+                console.log(error);
                 res.status(400).json({
                   success: false,
                   message:
-                    "record exists but incorrect verification details passed",
+                    "An error occured while deleting OTP verification credentials",
                   error,
                 });
-              }
-            })
-            .catch((error) => {
-              console.log(error);
-              res.status(500).json({
-                success: false,
-                message: "An error occured while comparing hashed values",
-                error,
               });
-            });
+          }
         }
-      } else {
-        // user verification details don't exist
-        res.status(400).json({
-          success: false,
-          message:
-            "The account record doesn't exist or has already been verified",
-        });
       }
-    })
-    .catch((error) => {
-      console.log(error);
-      res.status(500).json({
-        success: false,
-        message: "The verification attempt failed",
-        error,
-      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "OTP verification attempt failed",
+      error: error,
     });
+  }
 };
 
-const User_Verified_User = (req, res) => {
-  res
-    .status(200)
-    .json({ success: true, message: `User is successfully verified` });
+const User_Resend_OTP_Code = async (req, res) => {
+  try {
+    let { userId, email } = req.body;
+
+    if (!userId || !email) {
+      return res.status(409).json({
+        success: false,
+        message: "Empty otp details",
+      });
+    } else {
+      // delete existing records and resend OTP code
+      await UserOTPVerification.deleteMany({ userId });
+      const otp = `${Math.floor(1000 + Math.random() * 9000)}`;
+      const subject = `Ecommerce email verification`;
+      const html = `<p>Enter the OTP code below.</p><p>This code will expire in 1 hours.</p><br/>
+      <p>Enter this code <b>${otp}</b> to verify</p>`;
+
+      const saltRounds = 10;
+      const hashedOTP = await bcrypt.hash(otp, saltRounds);
+      new UserOTPVerification({
+        userId: userId,
+        otp: hashedOTP,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 3600000,
+      })
+        .save()
+        .then((result) => {
+          console.log("OTP successfully saved");
+        })
+        .catch((err) => {
+          console.log(err);
+          res.status(401).json({
+            success: false,
+            message: "Error in saving the OTP.Try again later",
+          });
+        });
+
+      sendOTPEmail(email, subject, html)
+        .then((result) => {
+          res.status(201).json({
+            status: "PENDING",
+            success: true,
+            message: `Resend code operation successfully completed${result.message}.Please authenticate your email.`,
+            data: {
+              userId: userId,
+              email: email,
+            },
+            redirect: "/api/auth/verifyOTP",
+          });
+        })
+        .catch((error) => {
+          console.log(error);
+          res.status(401).json({
+            success: false,
+            message: error.message,
+          });
+        });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "The resend OTP code operation failed",
+      error: error,
+    });
+  }
 };
 
 const User_Login_User = async (req, res) => {
@@ -240,7 +283,12 @@ const User_Login_User = async (req, res) => {
             success: true,
             message: "Login successful",
             authorization: token,
-            user: saved_user,
+            user: {
+              email: saved_user.email,
+              username: saved_user.username,
+              profile_pic: saved_user.profile_pic,
+              phone: saved_user.phone,
+            },
           });
         } else {
           console.log("Error");
@@ -302,11 +350,9 @@ const User_Logout_User = async (req, res) => {
 };
 
 module.exports = {
-  User_Login_Page,
-  User_Register_Page,
-  User_Verify_User,
-  User_Verified_User,
-  User_Register_User,
   User_Login_User,
+  User_Register_User,
   User_Logout_User,
+  User_Verify_OTP,
+  User_Resend_OTP_Code,
 };

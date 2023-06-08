@@ -1,6 +1,5 @@
 const express = require("express");
 const router = express.Router();
-const cors = require("cors");
 const UserDetailsController = require("../controllers/UserDetails");
 const {
   validateUserRegistration,
@@ -9,8 +8,6 @@ const {
 } = require("../middleware/validation/UserDetails");
 const { isAuth } = require("../middleware/Auth");
 
-router.get("/login", UserDetailsController.User_Login_Page);
-router.get("/register", UserDetailsController.User_Register_Page);
 router.post(
   "/register",
   validateUserRegistration,
@@ -25,10 +22,11 @@ router.post(
 );
 router.post("/logout", isAuth, UserDetailsController.User_Logout_User);
 
-router.get(
-  "/verify/:userId/:uniqueString",
-  UserDetailsController.User_Verify_User
+router.post("/verifyOTP", UserDetailsController.User_Verify_OTP);
+
+router.post(
+  "/resendverificationOTP",
+  UserDetailsController.User_Resend_OTP_Code
 );
-router.get("/verified", UserDetailsController.User_Verified_User);
 
 module.exports = router;
