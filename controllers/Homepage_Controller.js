@@ -1,9 +1,32 @@
+const Cart = require("../models/Cart");
+const Product = require("../models/Products");
 const UserDetails = require("../models/UserDetails");
+const Orders = require("../models/Orders");
 const path = require("path");
 
-const HomePage_Load_Page = (req, res) => {
-  res.status(200).json({ success: true });
+const Homepage_User_Profile = async (req, res) => {
+  await Orders.find({ user: req.user })
+    .then((orders) => {
+      let cart;
+      orders.forEach(function (order) {
+        cart = new Cart(order.cart);
+        order.items = cart.generateArray();
+      });
+      res.status(200).json({
+        success: true,
+        message: "Cart details successfully fetched",
+        orders: orders,
+      });
+    })
+    .catch((error) => {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized access. Try login in to view your profile",
+        error,
+      });
+    });
 };
+
 const Homepage_Upload_Profile_Pic = async (req, res) => {
   const user = req.user;
 
@@ -17,11 +40,6 @@ const Homepage_Upload_Profile_Pic = async (req, res) => {
     const fileUrl = path.join(filename);
     const profile_pic = fileUrl;
     console.log(profile_pic);
-    // const profileBuffer = req.file.buffer;
-    // const { width, height } = await sharp(profileBuffer).metadata();
-    // const profile_pic = await sharp(profileBuffer)
-    //   .resize(Math.round(width * 0.5), Math.round(height * 0.5))
-    //   .toBuffer();
 
     await UserDetails.findByIdAndUpdate(user._id, { profile_pic });
     res.status(201).json({
@@ -39,7 +57,120 @@ const Homepage_Upload_Profile_Pic = async (req, res) => {
   }
 };
 
+const HomePage_Add_To_Cart = async (req, res) => {
+  try {
+    let productId = req.params.id;
+    let cart = new Cart(req.session.cart ? req.session.cart : {});
+
+    await Product.findById(productId)
+      .then((result) => {
+        cart.add(result, result._id);
+        req.session.cart = cart;
+        console.log(req.session.cart);
+        res.status(200).json({
+          success: true,
+          message: `The item has been successfully added to cart`,
+        });
+      })
+      .catch((error) => {
+        res.status(401).json({
+          success: false,
+          message:
+            "Could not find the products provided in the products collection",
+          error: err,
+        });
+      });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Server Error: error while adding item to cart",
+      error: error,
+    });
+  }
+};
+
+const Homepage_Reduce_Cart_Items = (req, res) => {
+  let productId = req.params.id;
+  let cart = new Cart(req.session.cart ? req.session.cart : {});
+
+  cart.reduceByOne(productId);
+  req.session.cart = cart;
+  console.log(req.session.cart);
+  res.status(200).json({
+    success: true,
+    message: `The items reduction operation from the cart was successful`,
+    redirect: req.session.oldURL,
+  });
+};
+
+const Homepage_Remove_Items = (req, res) => {
+  let productId = req.params.id;
+  let cart = new Cart(req.session.cart ? req.session.cart : {});
+
+  cart.removeItem(productId);
+  req.session.cart = cart;
+  console.log(req.session.cart);
+  res.status(200).json({
+    success: true,
+    message: `The item selected was successfully removed from the cart`,
+    redirect: req.session.oldURL,
+  });
+};
+
+const HomePage_Shopping_Cart_Details = (req, res) => {
+  if (!req.session.cart) {
+    res.status(200).json({
+      success: true,
+      message: `No shopping cart session: No items in the shopping cart`,
+    });
+  }
+  let cart = new Cart(req.session.cart);
+  res.status(201).json({
+    success: true,
+    message: `A shopping cart session exists`,
+    products: cart.generateArray(),
+    totalPrice: cart.totalPrice,
+  });
+};
+
+const Homepage_Checkout = async (req, res) => {
+  if (!req.session.cart) {
+    res.status(401).json({
+      success: false,
+      message: `No shopping cart available`,
+    });
+  }
+  var cart = new Cart(req.session.cart);
+
+  const Order = new Orders({
+    user: req.user,
+    cart: cart,
+    address: req.body.address,
+    name: req.body.name,
+  });
+  Order.save()
+    .then((result) => {
+      console.log("Order details successfully saved");
+    })
+    .catch((error) => {
+      res.status(400).json({
+        success: false,
+        message: "An error occured while saving the order details",
+      });
+    });
+  req.session.cart = null;
+  res.status(201).json({
+    success: true,
+    message: "The payment is successfully made",
+  });
+};
+
 module.exports = {
-  HomePage_Load_Page,
+  Homepage_User_Profile,
   Homepage_Upload_Profile_Pic,
+  HomePage_Add_To_Cart,
+  Homepage_Reduce_Cart_Items,
+  Homepage_Remove_Items,
+  HomePage_Shopping_Cart_Details,
+  Homepage_Checkout,
 };

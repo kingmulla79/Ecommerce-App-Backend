@@ -9,14 +9,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ItsWachira/E-Commerce-App.git"
+    "url": "https://github.com/kingmulla79/Ecommerce-App-Backend"
   },
-  "author": "https://github.com/kingmulla79, https://github.com/ItsWachira",
+  "author": "https://github.com/kingmulla79",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/ItsWachira/E-Commerce-App/issues"
+    "url": "https://github.com/kingmulla79/Ecommerce-App-Backend/issues"
   },
-  "homepage": "https://github.com/ItsWachira/E-Commerce-App#readme",
+  "homepage": "https://github.com/kingmulla79/Ecommerce-App-Backend#readme",
   "dependencies": {
     "bcrypt": "^5.1.0",
     "bcryptjs": "^2.4.3",

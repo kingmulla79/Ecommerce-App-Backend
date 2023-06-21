@@ -1,11 +1,16 @@
 // third-party package and default package imports
 require("dotenv").config();
+require("./passport");
 const express = require("express");
 const morgan = require("morgan");
 const cors = require("cors");
-const { UserDetailsRoutes, HomepageRoutes } = require("./router");
+const { UserDetailsRoutes, HomepageRoutes, AdminRoutes } = require("./router");
 const connectDatabase = require("./Database/Database");
 const cookieParser = require("cookie-parser");
+const passport = require("passport");
+const session = require("express-session");
+const path = require("path");
+var MongoStore = require("connect-mongo");
 const app = express();
 
 //connection to DB
@@ -22,13 +27,36 @@ const server = app.listen(process.env.APP_PORT, () => {
 app.use(morgan("dev"));
 app.use(cors());
 app.use("/", express.static("uploads"));
+app.use("/", express.static("uploads/profile_pics"));
+app.use("/", express.static("uploads/products"));
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    store: MongoStore.create({
+      mongoUrl: process.env.DBURI,
+    }),
+    cookie: {
+      maxAge: 180 * 60 * 1000,
+    },
+  })
+);
+app.use(passport.initialize());
+app.use(passport.session());
+app.use(function (req, res, next) {
+  res.locals.session = req.session;
+  req.session.oldURL = req.url; //used for redirecting users after signing in
+  next();
+});
 
 // routes
 app.use("/api/auth", UserDetailsRoutes);
 app.use("/api/home", HomepageRoutes);
+app.use("/api/admin", AdminRoutes);
 
 // handling uncaught Exceptions
 process.on("uncaughtException", (err) => {
@@ -45,6 +73,38 @@ process.on("unhandledRejection", (err) => {
     process.exit();
   });
 });
+
+// google oauth start
+
+app.get("/", (req, res) => {
+  res.render("index");
+});
+app.get("/login", (req, res) => {
+  res.render("login");
+});
+
+app.get(
+  "/auth/google",
+  passport.authenticate("google", { scope: ["email", "profile"] })
+);
+
+app.get(
+  "/auth/google/callback",
+  passport.authenticate("google", {
+    successRedirect: "/auth/google/success",
+    failureRedirect: "/auth/google/failure",
+  })
+);
+
+app.get("/auth/google/success", (req, res) => {
+  res.render("dashboard");
+});
+app.get("/auth/google/logout", (req, res) => {
+  req.session.destroy();
+  res.render("logout");
+});
+
+// google oauth end
 
 app.use((req, res) => {
   res.status(404).json({
