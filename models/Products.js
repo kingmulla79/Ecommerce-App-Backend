@@ -17,7 +17,6 @@ const ProductsSchema = new Schema(
     },
     product_photo: {
       type: String,
-      required: true,
     },
   },
   { timestamps: true }
