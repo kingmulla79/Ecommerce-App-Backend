@@ -51,4 +51,11 @@ router.post(
   isVerified,
   Homepage_Controllers.Homepage_Checkout
 );
+
+router.get(
+  "/all-products",
+  isAuth,
+  isVerified,
+  Homepage_Controllers.Homepage_All_Products
+);
 module.exports = router;

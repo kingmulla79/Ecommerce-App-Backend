@@ -134,6 +134,15 @@ const HomePage_Shopping_Cart_Details = (req, res) => {
 };
 
 const Homepage_Checkout = async (req, res) => {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  let mm = today.getMonth() + 1; // Months start at 0!
+  let dd = today.getDate();
+
+  if (dd < 10) dd = "0" + dd;
+  if (mm < 10) mm = "0" + mm;
+
+  const formattedToday = dd + "/" + mm + "/" + yyyy;
   if (!req.session.cart) {
     res.status(401).json({
       success: false,
@@ -146,11 +155,18 @@ const Homepage_Checkout = async (req, res) => {
     user: req.user,
     cart: cart,
     address: req.body.address,
+    date: formattedToday,
     name: req.body.name,
   });
   Order.save()
     .then((result) => {
       console.log("Order details successfully saved");
+      req.session.cart = null;
+      res.status(201).json({
+        success: true,
+        message: "The payment is successfully made",
+        result,
+      });
     })
     .catch((error) => {
       res.status(400).json({
@@ -158,11 +174,30 @@ const Homepage_Checkout = async (req, res) => {
         message: "An error occured while saving the order details",
       });
     });
-  req.session.cart = null;
-  res.status(201).json({
-    success: true,
-    message: "The payment is successfully made",
-  });
+};
+const Homepage_All_Products = async (req, res) => {
+  try {
+    await Product.find().then((result) => {
+      if (result.length > 0) {
+        res.status(201).json({
+          products: result,
+          success: true,
+          message: "All the products have been successfully fetched",
+        });
+      } else {
+        res.status(401).json({
+          success: false,
+          message: "There are no products stored yet",
+        });
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Server Error: error while fetching product information",
+      error: error,
+    });
+  }
 };
 
 module.exports = {
@@ -173,4 +208,5 @@ module.exports = {
   Homepage_Remove_Items,
   HomePage_Shopping_Cart_Details,
   Homepage_Checkout,
+  Homepage_All_Products,
 };
